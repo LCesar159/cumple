@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>¡Feliz Cumpleaños, Mi Amor!</title>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: linear-gradient(135deg, #ffd1dc 0%, #ffe3e3 50%, #e8dff5 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 40px;
+      color: #4a4a4a;
+    }
+    header { text-align: center; margin-bottom: 20px; }
+    h1 { font-size: 1.8rem; color: #d14972; margin-bottom: 8px; }
+    p.subtitle { font-size: 0.95rem; color: #666; }
+    .cards-container {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      width: 100%;
+      max-width: 380px;
+    }
+    .card-wrapper {
+      position: relative;
+      width: 100%;
+      height: 105px;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      background: white;
+    }
+    .card-content {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 16px;
+      text-align: center;
+      background: #fff0f5;
+    }
+    .card-content .icon { font-size: 1.7rem; margin-bottom: 3px; }
+    .card-content .title { font-size: 1.05rem; font-weight: bold; color: #b8325a; line-height: 1.25; }
+    .card-content .desc { font-size: 0.8rem; color: #777; margin-top: 2px; }
+    canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+      cursor: pointer;
+    }
+    .card-wrapper.locked-secret {
+      opacity: 0.35;
+      pointer-events: none !important;
+      filter: grayscale(100%);
+    }
+    #final-message {
+      margin-top: 22px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 16px 20px;
+      border-radius: 16px;
+      box-shadow: 0 4px 15px rgba(209, 73, 114, 0.15);
+      max-width: 380px;
+      display: none;
+      animation: pop 0.4s ease-out forwards;
+    }
+    @keyframes pop {
+      0% { transform: scale(0.9); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>✨ ¡Feliz Cumpleaños! ✨</h1>
+    <p class="subtitle" id="instruction">Déjate llevar por los íconos. <b>Elige solo una pista</b> y raspa para descubrir qué oculta 🎁</p>
+  </header>
+
+  <div class="cards-container" id="container"></div>
+
+  <div id="final-message">
+    <h2 style="color: #d14972; font-size: 1.3rem; margin-bottom: 6px;">¡Premio Desbloqueado! 🎉</h2>
+    <p style="font-size: 0.95rem; line-height: 1.4;">¡Tómale una captura de pantalla a este resultado para cobrarlo cuando quieras! Te amo ❤️</p>
+  </div>
+
+  <script>
+    const gifts = [
+      {
+        pista: "🎁",
+        emoji_real: "🎁",
+        title: "Regalo Sorpresa Incógnito #1",
+        desc: "¡Pídemelo en persona para saber qué es!"
+      },
+      {
+        pista: "⛱️",
+        emoji_real: "🌊",
+        title: "Escapada a la Playa",
+        desc: "Día completo de relajo + Almuerzo y Cena incluidos"
+      },
+      {
+        pista: "🤑",
+        emoji_real: "🚲",
+        title: "40% de Descuento en Trek Marlin",
+        desc: "Aporte para financiar tu nueva bicicleta"
+      },
+      {
+        pista: "🧘‍♀️",
+        emoji_real: "💆‍♀️",
+        title: "Día de Spa & Masajes",
+        desc: "Sesión completa de relajación para ti"
+      },
+      {
+        pista: "🎁",
+        emoji_real: "🎁",
+        title: "Regalo Sorpresa Incógnito #2",
+        desc: "¡Un secreto especial preparado con mucho amor!"
+      }
+    ];
+
+    const container = document.getElementById("container");
+    const savedPrizeIndex = localStorage.getItem("regalo_cumple_elegido");
+    let hasWon = savedPrizeIndex !== null;
+
+    gifts.forEach((gift, idx) => {
+      const wrapper = document.createElement("div");
+      wrapper.className = "card-wrapper";
+      wrapper.id = `card-${idx}`;
+
+      wrapper.innerHTML = `
+        <div class="card-content">
+          <div class="icon">${gift.emoji_real}</div>
+          <div class="title">${gift.title}</div>
+          <div class="desc">${gift.desc}</div>
+        </div>
+        <canvas id="canvas-${idx}"></canvas>
+      `;
+
+      container.appendChild(wrapper);
+
+      const canvas = wrapper.querySelector("canvas");
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+      function initCanvas() {
+        const rect = wrapper.getBoundingClientRect();
+        canvas.width = rect.width * window.devicePixelRatio;
+        canvas.height = rect.height * window.devicePixelRatio;
+        ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+        if (savedPrizeIndex !== null) {
+          if (parseInt(savedPrizeIndex) === idx) {
+            canvas.style.display = "none";
+          } else {
+            ctx.fillStyle = "#888888";
+            ctx.fillRect(0, 0, rect.width, rect.height);
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 15px -apple-system, sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("🔒 BLOQUEADO", rect.width / 2, rect.height / 2 + 5);
+            wrapper.classList.add("locked-secret");
+          }
+          return;
+        }
+
+        const grad = ctx.createLinearGradient(0, 0, rect.width, rect.height);
+        grad.addColorStop(0, "#d8b5ff");
+        grad.addColorStop(1, "#1eaae8");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, rect.width, rect.height);
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "28px -apple-system, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(gift.pista, rect.width / 2, rect.height / 2 - 10);
+
+        ctx.font = "bold 13px -apple-system, sans-serif";
+        ctx.fillText(`✨ RASPA AQUÍ ✨`, rect.width / 2, rect.height / 2 + 25);
+      }
+
+      setTimeout(initCanvas, 50);
+
+      let isDrawing = false;
+      let scratchedCount = 0;
+
+      function scratch(x, y) {
+        if (hasWon) return;
+
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.beginPath();
+        ctx.arc(x, y, 24, 0, Math.PI * 2);
+        ctx.fill();
+
+        scratchedCount++;
+        if (scratchedCount > 18 && !hasWon) {
+          hasWon = true;
+          localStorage.setItem("regalo_cumple_elegido", idx);
+          canvas.style.display = "none";
+          disableRemainingCards(idx);
+          confetti({ particleCount: 130, spread: 75, origin: { y: 0.6 } });
+          document.getElementById("final-message").style.display = "block";
+          document.getElementById("instruction").textContent = "¡Ya descubriste tu sorpresa de cumpleaños!";
+        }
+      }
+
+      function getPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        return { x: clientX - rect.left, y: clientY - rect.top };
+      }
+
+      canvas.addEventListener("touchstart", (e) => { if (!hasWon) { isDrawing = true; const p = getPos(e); scratch(p.x, p.y); } });
+      canvas.addEventListener("touchmove", (e) => { if (isDrawing && !hasWon) { const p = getPos(e); scratch(p.x, p.y); } });
+      canvas.addEventListener("touchend", () => { isDrawing = false; });
+
+      canvas.addEventListener("mousedown", (e) => { if (!hasWon) { isDrawing = true; const p = getPos(e); scratch(p.x, p.y); } });
+      canvas.addEventListener("mousemove", (e) => { if (isDrawing && !hasWon) { const p = getPos(e); scratch(p.x, p.y); } });
+      window.addEventListener("mouseup", () => { isDrawing = false; });
+    });
+
+    if (savedPrizeIndex !== null) {
+      document.getElementById("final-message").style.display = "block";
+      document.getElementById("instruction").textContent = "¡Ya descubriste tu sorpresa de cumpleaños!";
+    }
+
+    function disableRemainingCards(chosenIdx) {
+      gifts.forEach((_, idx) => {
+        if (idx !== chosenIdx) {
+          const other = document.getElementById(`card-${idx}`);
+          other.classList.add("locked-secret");
+          const otherCanvas = other.querySelector("canvas");
+          const oCtx = otherCanvas.getContext("2d");
+          const rect = other.getBoundingClientRect();
+          oCtx.globalCompositeOperation = "source-over";
+          oCtx.fillStyle = "#888888";
+          oCtx.fillRect(0, 0, otherCanvas.width, otherCanvas.height);
+          oCtx.fillStyle = "#ffffff";
+          oCtx.font = "bold 15px -apple-system, sans-serif";
+          oCtx.textAlign = "center";
+          oCtx.fillText("🔒 BLOQUEADO", rect.width / 2, rect.height / 2 + 5);
+        }
+      });
+    }
+  </script>
+</body>
+</html>
